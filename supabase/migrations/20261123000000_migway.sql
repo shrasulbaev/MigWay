@@ -345,3 +345,7 @@ create policy "upload own photos" on storage.objects for insert to authenticated
   with check (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);
 create policy "delete own photos" on storage.objects for delete to authenticated
   using (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy "list own photos" on storage.objects for select to authenticated
+  using (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);
+revoke execute on function public.is_blocked(uuid, uuid) from anon, public;
+grant execute on function public.is_blocked(uuid, uuid) to authenticated;
