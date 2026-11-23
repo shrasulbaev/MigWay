@@ -312,20 +312,12 @@ language sql stable security definer set search_path = '' as $$
   limit 200;
 $$;
 
--- ---------- удаление аккаунта (требование App Store) ----------
-create or replace function public.delete_my_account() returns void
-language plpgsql security definer set search_path = '' as $$
-begin
-  if auth.uid() is null then raise exception 'not signed in'; end if;
-  delete from auth.users where id = auth.uid();
-end $$;
+-- удаление аккаунта: серверная функция supabase/functions/delete-account
 
-revoke execute on function public.delete_my_account() from anon, public;
 revoke execute on function public.start_chat(uuid, uuid) from anon, public;
 revoke execute on function public.my_chats() from anon, public;
 revoke execute on function public.set_my_location(double precision, double precision) from anon, public;
 revoke execute on function public.nearby_people(int, text) from anon, public;
-grant execute on function public.delete_my_account() to authenticated;
 grant execute on function public.start_chat(uuid, uuid) to authenticated;
 grant execute on function public.my_chats() to authenticated;
 grant execute on function public.set_my_location(double precision, double precision) to authenticated;

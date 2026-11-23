@@ -1613,7 +1613,7 @@ function ProfileTab({ ctx }: { ctx: Ctx }) {
             }
             setBusy(true)
             try {
-              await api.deleteAccount(ctx.me!)
+              await api.deleteAccount()
               ctx.setTab('home')
             } catch {
               ctx.toast(t('netError'))

@@ -235,13 +235,11 @@ export async function updateProfile(id: string, patch: ProfilePatch): Promise<Pr
   return data as Profile
 }
 
-export async function deleteAccount(me: string) {
-  // Сначала удаляем свои фото из хранилища, потом аккаунт (всё остальное удалится каскадом).
-  const { data } = await supabase.storage.from('photos').list(me, { limit: 1000 })
-  if (data?.length) await supabase.storage.from('photos').remove(data.map((f) => `${me}/${f.name}`))
-  const { error } = await supabase.rpc('delete_my_account')
+export async function deleteAccount() {
+  // Пользователя, его фото и все данные удаляет серверная функция delete-account.
+  const { error } = await supabase.functions.invoke('delete-account', { method: 'POST' })
   fail(error)
-  await supabase.auth.signOut({ scope: 'local' })
+  await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
 }
 
 /* ---------- избранное, лайки, блокировки, жалобы ---------- */
