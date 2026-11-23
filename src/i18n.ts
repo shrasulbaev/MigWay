@@ -55,6 +55,7 @@ const T = {
   fDescHint: ['Подробности, условия, для кого', 'Details, conditions, who it is for', 'Толук маалымат, шарттар', 'Batafsil, shartlar, kim uchun'],
   fPrice: ['Цена', 'Price', 'Баасы', 'Narxi'],
   fPeriod: ['За что', 'Per', 'Эмне үчүн', 'Nima uchun'],
+  priceNeeded: ['Укажите цену', 'Enter a price', 'Баасын жазыңыз', 'Narxini kiriting'],
   pNone: ['Разово', 'One-time', 'Бир жолу', 'Bir martalik'],
   pMonth: ['в месяц', 'per month', 'айына', 'oyiga'],
   pDay: ['в сутки', 'per day', 'суткасына', 'sutkasiga'],

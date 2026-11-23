@@ -114,6 +114,7 @@ interface ListingRow {
   premium: boolean
   views: number
   status: 'active' | 'hidden'
+  attrs: Record<string, string | number | boolean | string[]> | null
   created_at: string
   author: { name: string; avatar_url: string | null; created_at: string } | null
 }
@@ -141,6 +142,7 @@ function toListing(row: ListingRow, me: string | null): Listing {
     photos: row.photos,
     views: row.views,
     status: row.status,
+    attrs: row.attrs ?? {},
     mine: me !== null && row.owner === me,
   }
 }
@@ -182,6 +184,7 @@ export interface ListingInput {
   phone: string
   whatsapp: boolean
   photos: string[]
+  attrs: Record<string, string | number | boolean | string[]>
 }
 
 export async function createListing(input: ListingInput, me: string): Promise<Listing> {

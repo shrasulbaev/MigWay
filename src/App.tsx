@@ -7,6 +7,7 @@ import { DatingScreen, PersonScreen } from './Dating'
 import { Icon } from './Icon'
 import { BannerCarousel } from './Banners'
 import { ageOf, avatarStyle, type Gender, type Goal } from './people'
+import { MULTI, NEGOTIABLE, PRICE_LABEL, describeAttrs, specOf, type Attrs, type FieldDef } from './forms'
 import * as api from './api'
 import type { ChatRow, Message, Person, Profile, Session } from './api'
 
@@ -484,8 +485,8 @@ export function cityName(ctx: Ctx, countryId: CountryId, cityId: string) {
 
 export const PERIOD_KEY: Record<Period, Key> = { month: 'pMonth', day: 'pDay', hour: 'pHour', week: 'pWeek', kg: 'pKg' }
 
-function PriceText({ ctx, price, period, country, big }: { ctx: Ctx; price: number | null; period?: Period | null; country: CountryId; big?: boolean }) {
-  if (price === null) return <span className={big ? 'price price--big' : 'price'}>{ctx.t('free')}</span>
+function PriceText({ ctx, price, period, country, big, empty }: { ctx: Ctx; price: number | null; period?: Period | null; country: CountryId; big?: boolean; empty?: string }) {
+  if (price === null) return <span className={big ? 'price price--big' : 'price'}>{empty ?? ctx.t('free')}</span>
   return (
     <span className={big ? 'price price--big' : 'price'}>
       {formatMoney(price, countryOf(country).currency)}
@@ -495,7 +496,10 @@ function PriceText({ ctx, price, period, country, big }: { ctx: Ctx; price: numb
 }
 
 function Price({ ctx, listing, big }: { ctx: Ctx; listing: Listing; big?: boolean }) {
-  return <PriceText ctx={ctx} price={listing.price} period={listing.period} country={listing.country} big={big} />
+  const spec = specOf(listing.cat, listing.sub)
+  if (spec.price === 'none' && listing.price === null) return null
+  const empty = spec.price === 'free' ? ctx.t('free') : pick(ctx.prefs.lang, NEGOTIABLE)
+  return <PriceText ctx={ctx} price={listing.price} period={listing.period} country={listing.country} big={big} empty={empty} />
 }
 
 function agoMs(ctx: Ctx, created: number) {
@@ -1102,6 +1106,12 @@ function ListingScreen({ ctx, id }: { ctx: Ctx; id: string }) {
                 {sub ? ` · ${pick(prefs.lang, sub.name)}` : ''}
               </dd>
             </div>
+            {describeAttrs(listing.cat, listing.sub, listing.attrs, LANG_INDEX[prefs.lang], CURRENCY_SIGN[countryOf(listing.country).currency]).map(([label, value]) => (
+              <div key={label}>
+                <dt>{label}:</dt>
+                <dd>{value}</dd>
+              </div>
+            ))}
           </dl>
           <div className="safety">{t('safety')}</div>
           {!listing.mine && (
@@ -1370,10 +1380,23 @@ function PostForm({ ctx, editing }: { ctx: Ctx; editing?: Listing }) {
   const [phone, setPhone] = useState(editing?.phone ?? (ctx.profile?.phone || country.phonePrefix + ' '))
   const [whatsapp, setWhatsapp] = useState(editing?.whatsapp ?? true)
   const [photos, setPhotos] = useState<string[]>(editing?.photos ?? [])
+  const [attrs, setAttrs] = useState<Attrs>(editing?.attrs ?? {})
   const [uploading, setUploading] = useState(0)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const category = cat ? categoryOf(cat) : null
+  const spec = specOf(cat, sub)
+  const li = LANG_INDEX[prefs.lang]
+  const L = (v: [string, string, string, string]) => v[li]
+
+  function chooseSub(next: string) {
+    setSub(next)
+    const nextSpec = specOf(cat, next)
+    // период по умолчанию для категории, чистим поля, которых у неё нет
+    if (!editing || next !== editing.sub) setPeriod(nextSpec.periods[0] ?? '')
+    const keys = new Set(nextSpec.fields.map((f) => f.key))
+    setAttrs((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => keys.has(k))))
+  }
 
   // телефон из профиля может загрузиться позже формы
   useEffect(() => {
@@ -1408,7 +1431,15 @@ function PostForm({ ctx, editing }: { ctx: Ctx; editing?: Listing }) {
       setError(t('titleShort'))
       return
     }
-    const digits = price.replace(/\D/g, '')
+    const digits = spec.price === 'free' || spec.price === 'none' ? '' : price.replace(/\D/g, '')
+    if (!digits && !spec.priceOptional && spec.price !== 'free' && spec.price !== 'none') {
+      setError(t('priceNeeded'))
+      return
+    }
+    const keys = new Set(spec.fields.map((f) => f.key))
+    const cleanAttrs = Object.fromEntries(
+      Object.entries(attrs).filter(([k, v]) => keys.has(k) && v !== '' && v !== false && !(Array.isArray(v) && v.length === 0)),
+    )
     const cleanPhone = phone.trim().length > country.phonePrefix.length + 1 ? phone.trim() : ''
     const input: api.ListingInput = {
       country: countryId,
@@ -1418,10 +1449,11 @@ function PostForm({ ctx, editing }: { ctx: Ctx; editing?: Listing }) {
       title: title.trim(),
       description: desc.trim(),
       price: digits ? Number(digits) : null,
-      period: period || null,
+      period: digits && spec.periods.length ? period || spec.periods[0] : null,
       phone: cleanPhone,
       whatsapp: whatsapp && Boolean(cleanPhone),
       photos,
+      attrs: cleanAttrs,
     }
     setBusy(true)
     setError('')
@@ -1460,7 +1492,7 @@ function PostForm({ ctx, editing }: { ctx: Ctx; editing?: Listing }) {
         <h2 className="form__h">{t('postCategory')}</h2>
         <div className="catpick">
           {CATEGORIES.map((c) => (
-            <button key={c.id} className={`catpick__item${cat === c.id ? ' on' : ''}`} onClick={() => { setCat(c.id); setSub('') }}>
+            <button key={c.id} className={`catpick__item${cat === c.id ? ' on' : ''}`} onClick={() => { setCat(c.id); setSub(''); setAttrs({}) }}>
               <Icon name={c.icon} size={20} />
               {pick(prefs.lang, c.name)}
             </button>
@@ -1471,40 +1503,53 @@ function PostForm({ ctx, editing }: { ctx: Ctx; editing?: Listing }) {
             <h2 className="form__h">{t('postSub')}</h2>
             <div className="chips chips--wrap">
               {category.subs.map((s) => (
-                <button key={s.id} className={`chip${sub === s.id ? ' on' : ''}`} onClick={() => setSub(s.id)}>
+                <button key={s.id} className={`chip${sub === s.id ? ' on' : ''}`} onClick={() => chooseSub(s.id)}>
                   {pick(prefs.lang, s.name)}
                 </button>
               ))}
             </div>
           </>
         )}
-        <label className="field">
-          <span>{t('fTitle')}</span>
-          <input value={title} maxLength={100} onChange={(e) => setTitle(e.target.value)} placeholder={t('fTitleHint')} />
-        </label>
-        <label className="field">
-          <span>{t('fDesc')}</span>
-          <textarea rows={4} value={desc} maxLength={3000} onChange={(e) => setDesc(e.target.value)} placeholder={t('fDescHint')} />
-        </label>
-        <div className="field-row">
-          <label className="field">
-            <span>
-              {t('fPrice')}, {country.currency === 'RUB' ? '₽' : country.currency === 'USD' ? '$' : '₩'}
-            </span>
-            <input inputMode="numeric" value={price} maxLength={12} onChange={(e) => setPrice(e.target.value.replace(/[^\d\s]/g, ''))} placeholder={t('free')} />
-          </label>
-          <label className="field">
-            <span>{t('fPeriod')}</span>
-            <select value={period} onChange={(e) => setPeriod(e.target.value as Period | '')}>
-              <option value="">{t('pNone')}</option>
-              {(Object.keys(PERIOD_KEY) as Period[]).map((p) => (
-                <option key={p} value={p}>
-                  {t(PERIOD_KEY[p])}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+        {sub && (
+          <>
+            <label className="field">
+              <span>{t('fTitle')}</span>
+              <input value={title} maxLength={100} onChange={(e) => setTitle(e.target.value)} placeholder={L(spec.titleHint)} />
+            </label>
+            {spec.price !== 'none' && spec.price !== 'free' && (
+              <div className={spec.periods.length > 1 ? 'field-row' : undefined}>
+                <label className="field">
+                  <span>
+                    {L(PRICE_LABEL[spec.price])}, {CURRENCY_SIGN[country.currency]}
+                    {spec.periods.length === 1 && ` ${t(PERIOD_KEY[spec.periods[0]])}`}
+                  </span>
+                  <input
+                    inputMode="numeric"
+                    value={price}
+                    maxLength={12}
+                    onChange={(e) => setPrice(e.target.value.replace(/[^\d\s]/g, ''))}
+                    placeholder={spec.priceOptional ? L(NEGOTIABLE) : ''}
+                  />
+                </label>
+                {spec.periods.length > 1 && (
+                  <label className="field">
+                    <span>{t('fPeriod')}</span>
+                    <select value={period || spec.periods[0]} onChange={(e) => setPeriod(e.target.value as Period)}>
+                      {spec.periods.map((p) => (
+                        <option key={p} value={p}>
+                          {t(PERIOD_KEY[p])}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
+            )}
+            <AttrFields fields={spec.fields} attrs={attrs} setAttrs={setAttrs} li={li} currency={CURRENCY_SIGN[country.currency]} />
+            <label className="field">
+              <span>{t('fDesc')}</span>
+              <textarea rows={4} value={desc} maxLength={3000} onChange={(e) => setDesc(e.target.value)} placeholder={L(spec.descHint)} />
+            </label>
         <label className="field">
           <span>{t('fPhone')}</span>
           <input inputMode="tel" type="tel" value={phone} maxLength={30} onChange={(e) => setPhone(e.target.value)} />
@@ -1538,6 +1583,8 @@ function PostForm({ ctx, editing }: { ctx: Ctx; editing?: Listing }) {
             )}
           </div>
         </div>
+          </>
+        )}
         {error && <div className="error">{error}</div>}
         <button className="btn btn--primary btn--block btn--lg" disabled={busy || uploading > 0} onClick={submit}>
           {uploading > 0 ? t('uploading') : busy ? t('loading') : editing ? t('saveChanges') : t('publish')}
@@ -1545,6 +1592,74 @@ function PostForm({ ctx, editing }: { ctx: Ctx; editing?: Listing }) {
       </div>
     </>
   )
+}
+
+const LANG_INDEX: Record<Lang, number> = { ru: 0, en: 1, ky: 2, uz: 3 }
+const CURRENCY_SIGN = { RUB: '₽', USD: '$', KRW: '₩' } as const
+
+function AttrFields({ fields, attrs, setAttrs, li, currency }: { fields: FieldDef[]; attrs: Attrs; setAttrs: (fn: (prev: Attrs) => Attrs) => void; li: number; currency: string }) {
+  const set = (key: string, value: Attrs[string]) => setAttrs((prev) => ({ ...prev, [key]: value }))
+  const rows: FieldDef[][] = []
+  for (const f of fields) {
+    const last = rows[rows.length - 1]
+    if (f.half && last && last.length === 1 && last[0].half) last.push(f)
+    else rows.push([f])
+  }
+  const render = (f: FieldDef) => {
+    const v = attrs[f.key]
+    if (f.kind === 'bool')
+      return (
+        <label className="switch" key={f.key}>
+          <input type="checkbox" checked={v === true} onChange={(e) => set(f.key, e.target.checked)} />
+          <span>{f.label[li]}</span>
+        </label>
+      )
+    if (f.kind === 'chips') {
+      const multi = MULTI.has(f.key)
+      const selected = Array.isArray(v) ? v : v ? [String(v)] : []
+      return (
+        <div className="field" key={f.key}>
+          <span>{f.label[li]}</span>
+          <div className="chips chips--wrap chips--form">
+            {f.options!.map((op) => {
+              const on = selected.includes(op.id)
+              return (
+                <button
+                  key={op.id}
+                  type="button"
+                  className={`chip${on ? ' on' : ''}`}
+                  onClick={() => set(f.key, multi ? (on ? selected.filter((x) => x !== op.id) : [...selected, op.id]) : on ? '' : op.id)}
+                >
+                  {op.name[li]}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )
+    }
+    return (
+      <label className="field" key={f.key}>
+        <span>
+          {f.label[li]}
+          {f.unit ? `, ${f.unit[li]}` : f.money ? `, ${currency}` : ''}
+        </span>
+        <input
+          type={f.kind === 'date' ? 'date' : 'text'}
+          inputMode={f.kind === 'number' ? 'numeric' : undefined}
+          value={v === undefined ? '' : String(v)}
+          maxLength={f.kind === 'text' ? f.max ?? 60 : 12}
+          placeholder={f.hint?.[li] ?? ''}
+          onChange={(e) => {
+            if (f.kind !== 'number') return set(f.key, e.target.value)
+            const digits = e.target.value.replace(/\D/g, '')
+            set(f.key, digits ? Math.min(Number(digits), f.max ?? 1e10) : '')
+          }}
+        />
+      </label>
+    )
+  }
+  return <>{rows.map((row) => (row.length === 2 ? <div className="field-row" key={row[0].key}>{row.map(render)}</div> : render(row[0])))}</>
 }
 
 export function shrink(file: File, max: number): Promise<Blob> {

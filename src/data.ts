@@ -173,6 +173,7 @@ export interface Listing {
   photos: string[]
   views: number
   status: 'active' | 'hidden'
+  attrs: Record<string, string | number | boolean | string[]>
   mine?: boolean
 }
 
