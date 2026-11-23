@@ -365,7 +365,7 @@ export function App() {
         ))}
       </nav>
       {stack.map((screen, index) => (
-        <div className={`layer${screen === top ? ' layer--top' : ''}`} key={index}>
+        <SwipeLayer top={screen === top} onBack={pop} key={index}>
           {screen.type === 'listing' && <ListingScreen ctx={ctx} id={screen.id} />}
           {screen.type === 'category' && (screen.cat === 'people' ? <DatingScreen ctx={ctx} /> : <Feed ctx={ctx} cat={screen.cat} />)}
           {screen.type === 'person' && <PersonScreen ctx={ctx} id={screen.id} />}
@@ -376,13 +376,83 @@ export function App() {
           {screen.type === 'profileEdit' && <ProfileEdit ctx={ctx} />}
           {screen.type === 'terms' && <Terms ctx={ctx} />}
           {screen.type === 'blocked' && <BlockedList ctx={ctx} />}
-        </div>
+        </SwipeLayer>
       ))}
       {sheet?.type === 'location' && <LocationSheet ctx={ctx} />}
       {sheet?.type === 'lang' && <LangSheet ctx={ctx} />}
       {sheet?.type === 'report' && <ReportSheet ctx={ctx} listing={sheet.listing} user={sheet.user} />}
       {toastText && <div className="toast" role="status">{toastText}</div>}
     </Device>
+  )
+}
+
+/* Экран поверх вкладок. Свайп от левого края назад, как в iOS. */
+function SwipeLayer({ top, onBack, children }: { top: boolean; onBack: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const drag = useRef<{ x: number; y: number; t: number; dx: number; active: boolean } | null>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el || !top) return
+    const setX = (x: number, animate: boolean) => {
+      el.style.transition = animate ? 'transform .2s ease-out' : 'none'
+      el.style.transform = x ? `translateX(${x}px)` : ''
+    }
+    const start = (e: TouchEvent) => {
+      const t = e.touches[0]
+      const left = el.getBoundingClientRect().left
+      // как в iOS: жест начинается у левого края экрана
+      drag.current = t.clientX - left < 32 ? { x: t.clientX, y: t.clientY, t: Date.now(), dx: 0, active: false } : null
+    }
+    const move = (e: TouchEvent) => {
+      const d = drag.current
+      if (!d) return
+      const t = e.touches[0]
+      const dx = t.clientX - d.x
+      const dy = t.clientY - d.y
+      if (!d.active) {
+        if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
+          drag.current = null
+          return
+        }
+        if (dx < 8) return
+        d.active = true
+        el.classList.add('layer--dragging')
+      }
+      e.preventDefault()
+      d.dx = Math.max(0, dx)
+      setX(d.dx, false)
+    }
+    const end = () => {
+      const d = drag.current
+      drag.current = null
+      if (!d || !d.active) return
+      el.classList.remove('layer--dragging')
+      const width = el.offsetWidth
+      const fast = d.dx / Math.max(1, Date.now() - d.t) > 0.5
+      if (d.dx > width * 0.35 || (fast && d.dx > 40)) {
+        setX(width, true)
+        window.setTimeout(onBack, 180)
+      } else {
+        setX(0, true)
+      }
+    }
+    el.addEventListener('touchstart', start, { passive: true })
+    el.addEventListener('touchmove', move, { passive: false })
+    el.addEventListener('touchend', end)
+    el.addEventListener('touchcancel', end)
+    return () => {
+      el.removeEventListener('touchstart', start)
+      el.removeEventListener('touchmove', move)
+      el.removeEventListener('touchend', end)
+      el.removeEventListener('touchcancel', end)
+    }
+  }, [top, onBack])
+
+  return (
+    <div ref={ref} className={`layer${top ? ' layer--top' : ''}`}>
+      {children}
+    </div>
   )
 }
 

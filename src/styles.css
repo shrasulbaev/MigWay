@@ -21,7 +21,14 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: #e9eceb; }
-body { overscroll-behavior: none; }
+/* Приложение не должно двигаться целиком: без резинки, зума и горизонтального сдвига */
+html, body { position: fixed; inset: 0; width: 100%; overflow: hidden; overscroll-behavior: none; -webkit-text-size-adjust: 100%; touch-action: manipulation; }
+#root { height: 100%; }
+body { -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
+.bubble, .detail__desc { -webkit-user-select: text; user-select: text; }
+/* 16px в полях ввода: иначе iOS увеличивает страницу при фокусе и она «уезжает» */
+input, textarea, select { font-size: 16px !important; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
 a { color: inherit; text-decoration: none; }
@@ -34,7 +41,7 @@ h1, h2 { margin: 0; }
 /* Device frame: full screen on phones, a phone mockup on wide screens */
 .device { height: 100dvh; display: grid; place-items: center; }
 .screen { position: relative; width: 100%; height: 100%; background: #fff; overflow: hidden; display: flex; flex-direction: column; }
-.screen__body { flex: 1; overflow-y: auto; padding-bottom: 104px; scrollbar-width: none; }
+.screen__body { flex: 1; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding-bottom: 104px; scrollbar-width: none; }
 .screen__body::-webkit-scrollbar, .layer::-webkit-scrollbar { display: none; }
 @media (min-width: 600px) {
   .device { padding: 24px; background: radial-gradient(circle at 50% 0, #dff3ec, #e9eceb 60%); }
@@ -42,8 +49,9 @@ h1, h2 { margin: 0; }
 }
 
 /* Layers (pushed screens) */
-.layer { position: absolute; inset: 0; z-index: 30; background: #fff; overflow-y: auto; display: flex; flex-direction: column; scrollbar-width: none; animation: slide-in .22s ease-out; }
+.layer { position: absolute; inset: 0; z-index: 30; background: #fff; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; display: flex; flex-direction: column; scrollbar-width: none; animation: slide-in .22s ease-out; }
 .layer > * { flex-shrink: 0; }
+.layer--dragging { box-shadow: -8px 0 24px rgba(0, 0, 0, 0.12); overflow-y: hidden; }
 @keyframes slide-in { from { transform: translateX(24px); opacity: .4; } to { transform: none; opacity: 1; } }
 
 /* Buttons */
