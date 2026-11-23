@@ -10,7 +10,10 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 45
     env:
-      HAS_ASC_KEY: ${{ secrets.ASC_KEY_ID != '' }}
+      HAS_ASC_KEY: ${{ secrets.ASC_KEY_P8 != '' }}
+      ASC_KEY_ID: ZPR3UD8259
+      ASC_ISSUER_ID: b73dacf7-0eac-48d3-812a-87f30c43cf02
+      APPLE_TEAM_ID: 7SZW2UF6M4
     steps:
       - uses: actions/checkout@v4
 
@@ -40,14 +43,14 @@ jobs:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: |
           mkdir -p ~/private_keys
-          echo "$ASC_KEY_P8" > ~/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8
+          echo "$ASC_KEY_P8" > ~/private_keys/AuthKey_${{ env.ASC_KEY_ID }}.p8
 
       - name: Archive and upload to TestFlight
         if: env.HAS_ASC_KEY == 'true'
         env:
-          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          TEAM_ID: ${{ env.APPLE_TEAM_ID }}
+          KEY_ID: ${{ env.ASC_KEY_ID }}
+          ISSUER_ID: ${{ env.ASC_ISSUER_ID }}
         run: |
           cd ios/App
           BUILD=$(( ${{ github.run_number }} + 1 ))
